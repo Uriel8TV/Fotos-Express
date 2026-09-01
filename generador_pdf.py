@@ -16,33 +16,38 @@ def dibujar_marco_punteado(c, x, y, ancho, alto):
 
 
 def crear_pdf_combo(imagenes_procesadas):
-    # --- MODIFICACIÓN DE RUTA ABSOLUTA INTELIGENTE ---
-    # 1. Definimos las rutas más comunes de tu sistema de forma fija
+    # --- ENRUTADOR INTELIGENTE CON PRIORIDAD EN ONEDRIVE ---
+    ruta_usuario = os.path.expanduser("~")
+
+    # 1. Definimos las rutas posibles, poniendo primero OneDrive para coincidir con tu laptop
     rutas_posibles = [
-        r"D:\Users\Uriel\Escritorio",
-        os.path.join(os.path.expanduser("~"), "Desktop"),
-        os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop"),
-        os.path.join(os.path.expanduser("~"), "OneDrive", "Escritorio"),
-        os.path.join(os.path.expanduser("~"), "Escritorio")
+        os.path.join(ruta_usuario, "OneDrive", "Escritorio"),
+        os.path.join(ruta_usuario, "OneDrive", "Desktop"),
+        os.path.join(ruta_usuario, "Desktop"),
+        os.path.join(ruta_usuario, "Escritorio"),
+        r"D:\Users\Uriel\Escritorio"  # Tu respaldo fijo de la PC de escritorio
     ]
 
-    # 2. Buscamos cuál de esas carpetas sí existe físicamente en tu PC
+    # 2. Buscamos cuál de esas carpetas existe físicamente en la computadora actual
     ruta_escritorio = None
     for ruta in rutas_posibles:
         if os.path.exists(ruta):
-            ruta_escritorio = ruta
-            break
+            # Aseguramos tener permisos reales de escritura en la carpeta elegida
+            if os.access(ruta, os.W_OK):
+                ruta_escritorio = ruta
+                break
 
-    # 3. Si no encuentra ninguna (caso raro), la crea en la raíz del proyecto
+    # 3. Si no encuentra ninguna (caso de emergencia), usa la raíz del proyecto
     if not ruta_escritorio:
         ruta_escritorio = os.getcwd()
 
+    # 4. Creamos la carpeta final donde caerán los PDFs
     carpeta_destino = os.path.join(ruta_escritorio, "Archivos Fotos")
 
     if not os.path.exists(carpeta_destino):
         os.makedirs(carpeta_destino)
 
-    # El resto del código se queda exactamente igual abajo...
+    # Identificador único de tiempo para el nombre del archivo
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     ruta_salida = os.path.join(carpeta_destino, f"Combo_Fotos_{timestamp}.pdf")
 
