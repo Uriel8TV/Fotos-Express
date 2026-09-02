@@ -2,17 +2,24 @@
 from PIL import Image
 
 
-def recortar_y_redimensionar(ruta_imagen, ancho_objetivo, alto_objetivo, blanco_y_negro=False):
+def optimizar_modo_imagen(img):
     """
-    Recorta la imagen en una proporción fija centrada en el rostro,
-    la prepara para las dimensiones del PDF y aplica filtro B/N si se solicita.
+    Asegura que la imagen esté en modo RGB.
+    Quita transparencias (RGBA) o paletas indexadas (P) para evitar errores en el PDF.
     """
-    img = Image.open(ruta_imagen)
-
     if img.mode in ('RGBA', 'P'):
-        img = img.convert('RGB')
+        return img.convert('RGB')
+    return img
 
+
+def recorte_automatico_centrado(img, ancho_objetivo, alto_objetivo):
+    """
+    Función de respaldo: Recorta una imagen en una proporción fija
+    completamente centrada (ideal si el usuario no quiere usar el arrastre manual).
+    """
+    img = optimizar_modo_imagen(img)
     ancho_orig, alto_orig = img.size
+
     proporcion_objetivo = ancho_objetivo / alto_objetivo
     proporcion_orig = ancho_orig / alto_orig
 
@@ -25,9 +32,4 @@ def recortar_y_redimensionar(ruta_imagen, ancho_objetivo, alto_objetivo, blanco_
         offset = (alto_orig - nuevo_alto) // 2
         recuadro = (0, offset, ancho_orig, offset + nuevo_alto)
 
-    img_recortada = img.crop(recuadro)
-
-    if blanco_y_negro:
-        img_recortada = img_recortada.convert("L")
-
-    return img_recortada
+    return img.crop(recuadro)

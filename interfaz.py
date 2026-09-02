@@ -1,4 +1,3 @@
-# interfaz.py
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
@@ -11,10 +10,11 @@ class AppFotosExpress:
     def __init__(self, root):
         self.root = root
         self.root.title("Papelería - Fotos Express")
-        self.root.geometry("820x520")  # Ajustamos tamaño para los nuevos botones
+        self.root.geometry("820x520")
         self.root.resizable(False, False)
 
-        self.img_base = None  # Imagen original cargada sin deformar
+        self.img_alta_resolucion = None  # Guarda la foto original a máxima calidad
+        self.img_base = None  # Imagen en tamaño de pantalla sin deformar
         self.img_modificada = None  # Imagen con el zoom actual aplicado
         self.img_preview = None  # Objeto PhotoImage para Tkinter
         self.var_bn = tk.IntVar(value=0)
@@ -24,7 +24,7 @@ class AppFotosExpress:
         self.img_y = 0
         self.start_x = 0
         self.start_y = 0
-        self.escala_zoom = 1.0  # Multiplicador de escala (1.0 = 100%)
+        self.escala_zoom = 1.0
 
         self.crear_componentes()
 
@@ -44,7 +44,6 @@ class AppFotosExpress:
                                     font=("Arial", 9, "italic"))
         self.lbl_archivo.pack(pady=5)
 
-        # --- NUEVA SECCIÓN: BOTONES DE ACERCAR Y ALEJAR (ZOOM) ---
         frame_zoom = tk.LabelFrame(panel_izq, text=" Ajustar Tamaño (Zoom) ", padx=5, pady=5)
         frame_zoom.pack(pady=10, fill=tk.X)
 
@@ -73,7 +72,6 @@ class AppFotosExpress:
         self.panel_der = tk.LabelFrame(self.root, text=" Vista previa de Ajuste (Proporción Infantil) ")
         self.panel_der.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=15, pady=15)
 
-        # Canvas de visualización fija (250x300 px)
         self.canvas = tk.Canvas(self.panel_der, width=250, height=300, bg="#E0E0E0", highlightthickness=2,
                                 highlightbackground="green")
         self.canvas.pack(pady=35)
@@ -87,12 +85,15 @@ class AppFotosExpress:
 
         if ruta:
             self.lbl_archivo.config(text=f"Cargada: {os.path.basename(ruta)}", fg="green")
-            # Cargar imagen y normalizar escala base inicial
-            img_cargada = Image.open(ruta)
+
+            # Guardamos la foto original intacta sin reducir píxeles
+            self.img_alta_resolucion = Image.open(ruta)
+
+            # Crear la copia miniatura exclusiva para mostrar en pantalla
+            img_cargada = self.img_alta_resolucion.copy()
             img_cargada.thumbnail((500, 500))
             self.img_base = img_cargada
 
-            # Resetear valores de escala y posición
             self.escala_zoom = 1.0
             self.img_x = 0
             self.img_y = 0
@@ -100,7 +101,6 @@ class AppFotosExpress:
             self.img_modificada = self.img_base.copy()
             self.actualizar_vista_canvas()
 
-            # Activar botones
             self.btn_generar.config(state=tk.NORMAL)
             self.btn_zoom_in.config(state=tk.NORMAL)
             self.btn_zoom_out.config(state=tk.NORMAL)
@@ -118,23 +118,21 @@ class AppFotosExpress:
         self.canvas.create_image(self.img_x, self.img_y, image=self.img_preview, anchor=tk.NW)
         self.canvas.create_rectangle(2, 2, 250, 300, outline="green", width=3)
 
-    # --- NUEVAS FUNCIONES DE MANEJO DE ZOOM ---
     def acercar_foto(self):
         if not self.img_base: return
-        self.escala_zoom += 0.1  # Incrementa tamaño 10%
+        self.escala_zoom += 0.1
         self.aplicar_escala_imagen()
 
     def alejar_foto(self):
         if not self.img_base: return
-        if self.escala_zoom > 0.2:  # Límite para que no desaparezca
-            self.escala_zoom -= 0.1  # Reduce tamaño 10%
+        if self.escala_zoom > 0.2:
+            self.escala_zoom -= 0.1
             self.aplicar_escala_imagen()
 
     def aplicar_escala_imagen(self):
         ancho_nuevo = int(self.img_base.width * self.escala_zoom)
         alto_nuevo = int(self.img_base.height * self.escala_zoom)
 
-        # Redimensionar la imagen base respetando el multiplicador de zoom
         self.img_modificada = self.img_base.resize((ancho_nuevo, alto_nuevo), Image.Resampling.LANCZOS)
         self.actualizar_vista_canvas()
 
@@ -160,39 +158,69 @@ class AppFotosExpress:
             if not self.img_modificada: return
             aplicar_bn = True if self.var_bn.get() == 1 else False
 
-            # Capturar el encuadre exacto del cuadro de visualización
-            box = (
-                max(0, -self.img_x),
-                max(0, -self.img_y),
-                max(250, 250 - self.img_x),
-                max(300, 300 - self.img_y)
-            )
+            # Calcular el factor matemático entre la foto de alta calidad y la de pantalla
+            factor_escala_original = self.img_alta_resolucion.width / self.img_base.width
+            factor_total = factor_escala_original / self.escala_zoom
 
-            img_base_recortada = self.img_modificada.crop(box)
+            # Mapear las coordenadas del recuadro verde (250x300) a los píxeles reales de alta calidad
+            orig_x1 = int(max(0, -self.img_x) * factor_total)
+            orig_y1 = int(max(0, -self.img_y) * factor_total)
+            orig_x2 = int(orig_x1 + (250 * factor_total))
+            orig_y2 = int(orig_y1 + (300 * factor_total))
+
+            # Hacer el recorte directamente sobre el archivo original de máxima resolución
+            img_base_recortada = self.img_alta_resolucion.crop((orig_x1, orig_y1, orig_x2, orig_y2))
 
             imagenes_listas = {}
             for tipo, (ancho_puntos, alto_puntos) in MEDIDAS_FOTOS.items():
-                px_w = int(ancho_puntos)
-                px_h = int(alto_puntos)
+                # Factor exacto para alcanzar una densidad nativa de impresión de 300 DPI puros en ReportLab (300/72)
+                DPI_FACTOR = 4.1667
 
-                img_escalada = img_base_recortada.resize((px_w, px_h), Image.Resampling.LANCZOS)
+                # Píxeles idóneos proporcionales e independientes para cada tamaño
+                px_w = int(ancho_puntos * DPI_FACTOR)
+                px_h = int(alto_puntos * DPI_FACTOR)
+
+                # Calcular proporciones exactas para evitar distorsiones o estiramientos
+                proporcion_destino = px_w / px_h
+                proporcion_recorte = img_base_recortada.width / img_base_recortada.height
+
+                if proporcion_recorte > proporcion_destino:
+                    # El recorte es más ancho de lo necesario, se ajustan los laterales
+                    ancho_nuevo = int(img_base_recortada.height * proporcion_destino)
+                    offset = (img_base_recortada.width - ancho_nuevo) // 2
+                    caja_ajustada = (offset, 0, offset + ancho_nuevo, img_base_recortada.height)
+                else:
+                    # El recorte es más alto de lo necesario, se ajusta el margen superior/inferior
+                    alto_nuevo = int(img_base_recortada.width / proporcion_destino)
+                    offset = (img_base_recortada.height - alto_nuevo) // 2
+                    caja_ajustada = (0, offset, img_base_recortada.width, offset + alto_nuevo)
+
+                # Extraer el sub-recorte perfectamente encuadrado
+                img_proporcional = img_base_recortada.crop(caja_ajustada)
+
+                # Redimensionamiento fotográfico de alta calidad con filtro LANCZOS
+                img_escalada = img_proporcional.resize((px_w, px_h), Image.Resampling.LANCZOS)
+
                 if aplicar_bn:
                     img_escalada = img_escalada.convert("L")
+                # --- CONTINUACIÓN EXACTA DESDE TU CORTE ---
                 imagenes_listas[tipo] = img_escalada
 
+            # Enviar las imágenes en súper resolución al constructor del PDF
             ruta_final_pdf = generador_pdf.crear_pdf_combo(imagenes_listas)
 
             messagebox.showinfo("¡Éxito!",
                                 f"El PDF con guías de corte se guardó en tu Escritorio.\n\nCarpeta: 'Archivos Fotos'")
 
-            # Limpiar interfaz
+            # Limpiar interfaz para el siguiente flujo de trabajo
             self.btn_generar.config(state=tk.DISABLED)
             self.btn_zoom_in.config(state=tk.DISABLED)
             self.btn_zoom_out.config(state=tk.DISABLED)
             self.lbl_archivo.config(text="Ningún archivo seleccionado", fg="gray")
             self.canvas.delete("all")
+            self.img_alta_resolucion = None
             self.img_base = None
             self.img_modificada = None
 
         except Exception as e:
-            messagebox.showerror("Error", f"Ocurrió un detalle al procesar:\n{str(e)}")
+            messagebox.showerror("Error", f"No se pudo procesar la imagen de forma correcta:\n{str(e)}")
